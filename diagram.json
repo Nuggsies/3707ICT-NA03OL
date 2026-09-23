@@ -1,27 +1,80 @@
 {
   "version": 1,
-  "author": "Anonymous maker",
+  "author": "Benj",
   "editor": "wokwi",
   "parts": [
     { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": -134.4, "left": -62.36, "attrs": {} },
-    { "type": "wokwi-dht22", "id": "dht1", "top": -393.3, "left": -149.4, "attrs": {} },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht1",
+      "top": -150.6,
+      "left": 114.3,
+      "rotate": 90,
+      "attrs": {}
+    },
     {
       "type": "wokwi-pir-motion-sensor",
       "id": "pir1",
-      "top": -274.4,
-      "left": -247.38,
+      "top": 144,
+      "left": -141.22,
+      "rotate": 180,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay1",
+      "top": -141,
+      "left": -207.6,
+      "rotate": 270,
+      "attrs": {}
+    },
+    { "type": "wokwi-led", "id": "led1", "top": -138, "left": -265, "attrs": { "color": "red" } },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -63.8,
+      "left": -269.65,
+      "rotate": 270,
+      "attrs": { "value": "330" }
+    },
+    {
+      "type": "wokwi-gas-sensor",
+      "id": "gas1",
+      "top": -320.8,
+      "left": -352.3,
+      "rotate": 90,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-servo",
+      "id": "servo1",
+      "top": -359,
+      "left": -575,
+      "rotate": 270,
       "attrs": {}
     }
   ],
   "connections": [
     [ "esp:TX", "$serialMonitor:RX", "", [] ],
     [ "esp:RX", "$serialMonitor:TX", "", [] ],
-    [ "esp:3V3", "dht1:VCC", "green", [ "h0" ] ],
-    [ "esp:3V3", "pir1:VCC", "green", [ "h0" ] ],
-    [ "pir1:GND", "esp:GND.1", "black", [ "v0" ] ],
-    [ "esp:GND.1", "dht1:GND", "black", [ "h0" ] ],
-    [ "esp:15", "dht1:SDA", "green", [ "v0" ] ],
-    [ "esp:13", "pir1:OUT", "green", [ "h0" ] ]
+    [ "esp:3V3", "dht1:VCC", "red", [ "h-28.65", "v-38.4", "h144", "v38.4" ] ],
+    [ "esp:3V3", "pir1:VCC", "red", [ "h-28.65", "v230.4" ] ],
+    [ "pir1:GND", "esp:GND.1", "black", [ "v-0.26", "h0.26", "v-124.54" ] ],
+    [ "esp:GND.1", "dht1:GND", "black", [ "h-9.45", "v76.8", "h134.4", "v-249.6" ] ],
+    [ "esp:15", "dht1:SDA", "blue", [ "h19.2", "v-134.4", "h28.8" ] ],
+    [ "esp:13", "pir1:OUT", "orange", [ "h-38.25", "v115.2" ] ],
+    [ "esp:5V", "relay1:VCC", "red", [] ],
+    [ "esp:GND.1", "relay1:GND", "black", [] ],
+    [ "esp:26", "relay1:IN", "purple", [ "h-76.65", "v-115.2" ] ],
+    [ "esp:27", "r1:1", "yellow", [] ],
+    [ "r1:2", "led1:A", "yellow", [ "v-85.2" ] ],
+    [ "led1:C", "esp:GND.1", "black", [ "h0.4", "v240" ] ],
+    [ "gas1:VCC", "esp:5V", "red", [ "v0" ] ],
+    [ "gas1:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "esp:34", "gas1:AOUT", "green", [ "h-47.85", "v-134.4", "h-163.2" ] ],
+    [ "servo1:V+", "esp:5V", "red", [ "v0" ] ],
+    [ "esp:25", "servo1:PWM", "green", [ "h-423.25" ] ],
+    [ "servo1:GND", "esp:GND.1", "black", [ "v0" ] ]
   ],
   "dependencies": {}
 }
