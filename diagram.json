@@ -43,7 +43,7 @@
       "top": -320.8,
       "left": -352.3,
       "rotate": 90,
-      "attrs": {}
+      "attrs": {"ppm": "100"}
     },
     {
       "type": "wokwi-servo",
