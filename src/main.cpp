@@ -14,11 +14,13 @@ WiFiClient client;
 Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, IO_USERNAME, IO_KEY);
 
 // adafruit feeds
-Adafruit_MQTT_Publish tempFeed     = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-temperature");
+Adafruit_MQTT_Publish tempFeed = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-temperature");
 Adafruit_MQTT_Publish humidityFeed = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-humidity");
-Adafruit_MQTT_Publish gasFeed      = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-gas");
-Adafruit_MQTT_Publish motionFeed   = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-motion");
-Adafruit_MQTT_Publish stateFeed    = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-state");
+Adafruit_MQTT_Publish gasFeed = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-gas");
+Adafruit_MQTT_Publish motionFeed = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-motion");
+Adafruit_MQTT_Publish stateFeed = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-state");
+Adafruit_MQTT_Publish alertFeed = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-alert");
+Adafruit_MQTT_Publish servoFeed = Adafruit_MQTT_Publish(&mqtt, IO_USERNAME "/feeds/factory-servo");
 
 const int DHT_PIN = 15;   // DHT1 SDA   ->  ESP32 GPIO 15
 const int PIR_PIN = 13;   // PIR1 OUT   ->  ESP32 GPIO 13
@@ -27,19 +29,24 @@ const int ALERT_PIN = 27; // Buzzer/LED alert
 const int GAS_PIN = 34;   // MQ2 gas sensor analog output pin
 const int SERVO_PIN = 25; // Vent servo
 
-
 DHTesp dhtSensor;
 Servo ventServo;
 
-// automation states 
-enum State { SURVEY, CAUTION, EMERGENCY, FAILSAFE };
+// automation states
+enum State
+{
+  SURVEY,
+  CAUTION,
+  EMERGENCY,
+  FAILSAFE
+};
 State currentState = SURVEY;
 
 // temperature thresholds with dead bands
-const float CAUTION_ENTER = 40.0;   // enters CAUTION state at 40 degrees 
-const float CAUTION_EXIT = 35.0;    // must drop below this value to return to SURVEY state
+const float CAUTION_ENTER = 40.0; // enters CAUTION state at 40 degrees
+const float CAUTION_EXIT = 35.0;  // must drop below this value to return to SURVEY state
 const float EMERGENCY_ENTER = 60.0;
-const float EMERGENCY_EXIT = 55.0;  // must drop below this value to leave EMERGENCY state
+const float EMERGENCY_EXIT = 55.0; // must drop below this value to leave EMERGENCY state
 
 // gas thresholds (analog 0 - 4095 may need tuning)
 const int GAS_EMERGENCY_THRESHOLD = 1800;
@@ -52,30 +59,35 @@ unsigned long pollInterval = 2000; // default SURVEY state polling rate
 // adafruit free allows 30 data points a minute total
 // 20000ms interval --> 5 feeds * 3 cycles a minute = 15 publishes per min
 unsigned long lastPublishTime = 0;
-const unsigned long PUBLISH_INTERVAL = 20000;
+const unsigned long PUBLISH_INTERVAL = 30000;
 
 // store latest sensor values and update every poll to be read by publish timer
 float latestTemp = 0.0;
 float latestHumidity = 0.0;
 int latestGas = 0;
 bool latestMotion = false;
+bool latestAlert = false;
+int latestServoState = 0;
 
-
-void MQTT_connect() {
-  if (mqtt.connected()) {
+void MQTT_connect()
+{
+  if (mqtt.connected())
+  {
     return;
   }
 
   Serial.print("Connecting to MQTT... ");
   int8_t ret;
   uint8_t retries = 3;
-  while ((ret = mqtt.connect()) != 0) {
+  while ((ret = mqtt.connect()) != 0)
+  {
     Serial.println(mqtt.connectErrorString(ret));
     Serial.println("Retrying MQTT connection in 5 seconds... ");
     mqtt.disconnect();
     delay(5000);
     retries--;
-    if (retries == 0) {
+    if (retries == 0)
+    {
       Serial.println("MQTT connection failed, will not publish");
       return;
     }
@@ -83,116 +95,167 @@ void MQTT_connect() {
   Serial.println("MQTT connected successfully");
 }
 
-void updateState(float temperature, bool sensorFault, bool gasHigh) {
-  if (sensorFault) {
+void updateState(float temperature, bool sensorFault, bool gasHigh)
+{
+  if (sensorFault)
+  {
     currentState = FAILSAFE;
     return; // FAILSAFE state will be enabled until manual intervention (loop() has the reset logic)
   }
 
-  //elevated gas reading enables EMERGENCY state regardless of the temperature state
-  if (gasHigh) {
+  // elevated gas reading enables EMERGENCY state regardless of the temperature state
+  if (gasHigh)
+  {
     currentState = EMERGENCY;
     return;
   }
 
-  switch (currentState) {
-    case SURVEY:
-      if (temperature > CAUTION_ENTER) currentState = CAUTION;
-      break;
+  switch (currentState)
+  {
+  case SURVEY:
+    if (temperature > CAUTION_ENTER)
+      currentState = CAUTION;
+    break;
 
-      case CAUTION:
-      if (temperature > EMERGENCY_ENTER) currentState = EMERGENCY;
-      else if (temperature < CAUTION_EXIT) currentState = SURVEY;
-      break;
+  case CAUTION:
+    if (temperature > EMERGENCY_ENTER)
+      currentState = EMERGENCY;
+    else if (temperature < CAUTION_EXIT)
+      currentState = SURVEY;
+    break;
 
-      case EMERGENCY:
-      if (temperature < EMERGENCY_EXIT) currentState = CAUTION;
-      break;
+  case EMERGENCY:
+    if (temperature < EMERGENCY_EXIT)
+      currentState = CAUTION;
+    break;
 
-      case FAILSAFE:
-      // requires sensorFault to clear naturally next read
-      if (!sensorFault) currentState = EMERGENCY; // failsafe: re-enter via EMERGENCY, not straight to SURVEY
-      break;
+  case FAILSAFE:
+    // requires sensorFault to clear naturally next read
+    if (!sensorFault)
+      currentState = EMERGENCY; // failsafe: re-enter via EMERGENCY, not straight to SURVEY
+    break;
   }
 }
 
-void updateActuators() {
-  switch (currentState) {
-    case SURVEY:
-      digitalWrite(RELAY_PIN, HIGH); //machine powered
-      digitalWrite(ALERT_PIN, LOW);
-      ventServo.write(0); //vent closed
-      pollInterval = 2000;
-      break;
+void updateActuators()
+{
+  switch (currentState)
+  {
+  case SURVEY:
+    digitalWrite(RELAY_PIN, HIGH); // machine powered
+    digitalWrite(ALERT_PIN, LOW);
+    ventServo.write(0); // vent closed
+    pollInterval = 2000;
 
-    case CAUTION:
-      digitalWrite(RELAY_PIN, HIGH);
-      digitalWrite(ALERT_PIN, HIGH); // alert active
-      ventServo.write(0);
-      pollInterval = 1000;            //poll faster to catch any trends
-      break;
+    latestAlert = false;
+    latestServoState = 0;
+    break;
 
-    case EMERGENCY:
-      digitalWrite(RELAY_PIN, LOW); //cut power to the machine
-      digitalWrite(ALERT_PIN, HIGH);
-      ventServo.write(90); //open vent to clear heat/gas
-      pollInterval = 500;
-      break;
+  case CAUTION:
+    digitalWrite(RELAY_PIN, HIGH);
+    digitalWrite(ALERT_PIN, HIGH); // alert active
+    ventServo.write(0);
+    pollInterval = 1000; // poll faster to catch any trends
 
-    case FAILSAFE:
-      digitalWrite(RELAY_PIN, LOW); // treat as emergency
-      digitalWrite(ALERT_PIN, HIGH);
-      ventServo.write(90);
-      pollInterval = 500;
-      break;
+    latestAlert = true;
+    latestServoState = 0;
+    break;
+
+  case EMERGENCY:
+    digitalWrite(RELAY_PIN, LOW); // cut power to the machine
+    digitalWrite(ALERT_PIN, HIGH);
+    ventServo.write(90); // open vent to clear heat/gas
+    pollInterval = 500;
+
+    latestAlert = true;
+    latestServoState = 1;
+    break;
+
+  case FAILSAFE:
+    digitalWrite(RELAY_PIN, LOW); // treat as emergency
+    digitalWrite(ALERT_PIN, HIGH);
+    ventServo.write(90);
+    pollInterval = 500;
+
+    latestAlert = true;
+    latestServoState = 1;
+    break;
   }
 }
 
-void printStatus(float temperature, float humidity, bool motionDetected, int gasReading) {
-  const char* stateNames[] = {"SURVEY", "CAUTION", "EMERGENCY", "FAILSAFE"};
+void printStatus(float temperature, float humidity, bool motionDetected, int gasReading)
+{
+  const char *stateNames[] = {"SURVEY", "CAUTION", "EMERGENCY", "FAILSAFE"};
+  Serial.println("====================");
   Serial.print("State: ");
-  Serial.print(stateNames[currentState]);
-  Serial.print(" | Temp: ");
+  Serial.println(stateNames[currentState]);
+
+  Serial.print("Temp: ");
   Serial.print(temperature, 2);
-  Serial.print("C | Humidity: ");
+  Serial.println(" C");
+
+  Serial.print("Humidity: ");
   Serial.print(humidity, 1);
-  Serial.print("% | Motion: ");
+  Serial.println(" %");
+
+  Serial.print("Motion: ");
   Serial.println(motionDetected ? "YES" : "NO");
-  Serial.print(" | Gas: ");
+
+  Serial.print("Gas: ");
   Serial.println(gasReading);
+
+  Serial.print("Servo/Vent: ");
+  Serial.println(latestServoState == 1 ? "OPEN" : "CLOSED");
+
+  Serial.print("Alert LED: ");
+  Serial.println(latestAlert ? "ON" : "OFF");
+  Serial.println("====================");
 }
 
-void publishToAdafruit(float temperature, float humidity, bool motionDetected, int gasReading) {
-  const char* stateNames[] = {"SURVEY", "CAUTION", "EMERGENCY", "FAILSAFE"};
+void publishToAdafruit(float temperature, float humidity, bool motionDetected, int gasReading, bool alertState, int servoState)
+{
+  const char *stateNames[] = {"SURVEY", "CAUTION", "EMERGENCY", "FAILSAFE"};
 
-  if (!tempFeed.publish(temperature)) {
+  if (!tempFeed.publish(temperature))
+  {
     Serial.println("Failed to publish temperature");
   }
-  if (!humidityFeed.publish(humidity)) {
+  if (!humidityFeed.publish(humidity))
+  {
     Serial.println("Failed to publish humidity");
   }
-  if (!gasFeed.publish(gasReading)) {
+  if (!gasFeed.publish(gasReading))
+  {
     Serial.println("Failed to publish gas");
   }
-  if (!motionFeed.publish(motionDetected ? "YES" : "NO")) {
+  if (!motionFeed.publish(motionDetected ? "YES" : "NO"))
+  {
     Serial.println("Failed to publish motion");
   }
-  if (!stateFeed.publish(stateNames[currentState])) {
+  if (!stateFeed.publish(stateNames[currentState]))
+  {
     Serial.println("Failed to publish state");
   }
-
-
-
+  if (!alertFeed.publish(alertState ? 1 : 0))
+  {
+    Serial.println("Alert state published successfully");
+  }
+  if (!servoFeed.publish(servoState))
+  {
+    Serial.println("Servo state published successfully");
+  }
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
   delay(1000);
 
   Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  //WiFi.begin("Wokwi-GUEST", "");
-  while (WiFi.status() != WL_CONNECTED) {
+  // WiFi.begin("Wokwi-GUEST", "");
+  while (WiFi.status() != WL_CONNECTED)
+  {
     delay(500);
     Serial.print(".");
   }
@@ -208,49 +271,59 @@ void setup() {
   ventServo.attach(SERVO_PIN);
   ventServo.write(0);
 
-  digitalWrite(RELAY_PIN, HIGH); //start in SURVEY state
+  digitalWrite(RELAY_PIN, HIGH); // start in SURVEY state
   digitalWrite(ALERT_PIN, LOW);
 }
 
-void loop() {
-    MQTT_connect();
-  //only take a new reading ocne pollInterval has elapsed
-  if (millis() - lastReadTime >= pollInterval) {
+void loop()
+{
+  MQTT_connect();
+  // only take a new reading ocne pollInterval has elapsed
+  if (millis() - lastReadTime >= pollInterval)
+  {
     lastReadTime = millis();
 
-  TempAndHumidity  data = dhtSensor.getTempAndHumidity();
-  bool motionDetected = digitalRead(PIR_PIN);
-  bool sensorFault = isnan(data.temperature) || isnan(data.humidity);
-  int gasReading = analogRead(GAS_PIN);
+    TempAndHumidity data = dhtSensor.getTempAndHumidity();
+    bool motionDetected = digitalRead(PIR_PIN);
+    bool sensorFault = isnan(data.temperature) || isnan(data.humidity);
+    int gasReading = analogRead(GAS_PIN);
 
-  //float gasPPM = (gasReading / 4095.0) * 100000.0; 
-  // float gasPPM = 0.0;
-  // if (gasReading > GAS_BASELINE_ADC) {
-  //   gasPPM = ((float)(gasReading - GAS_BASELINE_ADC) / (4095.0 - GAS_BASELINE_ADC)) * 100000.0;
-  // }
+    // float gasPPM = (gasReading / 4095.0) * 100000.0;
+    //  float gasPPM = 0.0;
+    //  if (gasReading > GAS_BASELINE_ADC) {
+    //    gasPPM = ((float)(gasReading - GAS_BASELINE_ADC) / (4095.0 - GAS_BASELINE_ADC)) * 100000.0;
+    //  }
 
-  //keep raw ADC for FSM threshold checks
-  bool gasHigh = gasReading > GAS_EMERGENCY_THRESHOLD;
+    // keep raw ADC for FSM threshold checks
+    bool gasHigh = gasReading > GAS_EMERGENCY_THRESHOLD;
 
-  updateState(data.temperature, sensorFault, gasHigh);
-  updateActuators();
+    updateState(data.temperature, sensorFault, gasHigh);
+    updateActuators();
 
-  // use gasPPM for easier to interpret terminal output
-  printStatus(data.temperature, data.humidity, motionDetected, gasReading);
+    // use gasPPM for easier to interpret terminal output
+    printStatus(data.temperature, data.humidity, motionDetected, gasReading);
 
-  // storedd values for cloud publish
-  latestTemp = data.temperature;
-  latestHumidity = data.humidity;
-  latestGas = gasReading;
-  latestMotion = motionDetected;
+    // storedd values for cloud publish
+    latestTemp = data.temperature;
+    latestHumidity = data.humidity;
+    latestGas = gasReading;
+    latestMotion = motionDetected;
+
+    // immediate publish if state changes
+    // if (currentState != previousState)
+    // {
+    //   previousState = currentState;
+    //   lastPublishTime = millis(); // reset publish timer
+    //   publishToAdafruit(latestTemp, latestHumidity, latestMotion, latestGas, latestAlert, latestServoState);
+    // }
   }
-
   // cloud publishing is limited to 30 updates per minute
   // program still locally polls at the rates set above, but publishes the data to cloud slower
   // can be changed in production once the free tier isn't being used
-  if (millis() - lastPublishTime >= PUBLISH_INTERVAL) {
+  if (millis() - lastPublishTime >= PUBLISH_INTERVAL)
+  {
     lastPublishTime = millis();
-  publishToAdafruit(latestTemp, latestHumidity, latestMotion, latestGas);
+    publishToAdafruit(latestTemp, latestHumidity, latestMotion, latestGas, latestAlert, latestServoState);
   }
 
   mqtt.processPackets(10);
