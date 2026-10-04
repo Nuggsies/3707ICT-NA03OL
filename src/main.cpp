@@ -58,7 +58,7 @@ unsigned long pollInterval = 2000; // default SURVEY state polling rate
 
 // cloud publishing rate control of 5 feeds per cycle
 // adafruit free allows 30 data points a minute total
-// 20000ms interval --> 5 feeds * 3 cycles a minute = 15 publishes per min
+// 20000ms interval --> 7 feeds * 3 cycles a minute =  publishes per min
 unsigned long lastPublishTime = 0;
 const unsigned long PUBLISH_INTERVAL = 30000;
 
@@ -101,9 +101,8 @@ void updateState(float temperature, bool sensorFault, bool gasHigh)
   if (sensorFault)
   {
     currentState = FAILSAFE;
-    return; // FAILSAFE state will be enabled until manual intervention (loop() has the reset logic)
+    return; 
   }
-
   // elevated gas reading enables EMERGENCY state regardless of the temperature state
   if (gasHigh)
   {
@@ -289,13 +288,8 @@ void loop()
     TempAndHumidity data = dhtSensor.getTempAndHumidity();
     bool motionDetected = digitalRead(PIR_PIN);
     bool sensorFault = isnan(data.temperature) || isnan(data.humidity);
+    //bool sensorFault = true; - used to test the failsafe state. works fine
     int gasReading = analogRead(GAS_PIN);
-
-    // float gasPPM = (gasReading / 4095.0) * 100000.0;
-    //  float gasPPM = 0.0;
-    //  if (gasReading > GAS_BASELINE_ADC) {
-    //    gasPPM = ((float)(gasReading - GAS_BASELINE_ADC) / (4095.0 - GAS_BASELINE_ADC)) * 100000.0;
-    //  }
 
     // keep raw ADC for FSM threshold checks
     bool gasHigh = gasReading > GAS_EMERGENCY_THRESHOLD;
@@ -312,17 +306,6 @@ void loop()
     latestGas = gasReading;
     latestMotion = motionDetected;
 
-    // immediate publish if state changes
-    // if (currentState != previousState)
-    // {
-    //   previousState = currentState;
-    //   lastPublishTime = millis(); // reset publish timer
-    //   publishToAdafruit(latestTemp, latestHumidity, latestMotion, latestGas, latestAlert, latestServoState);
-    // }
-  }
-  // cloud publishing is limited to 30 updates per minute
-  // program still locally polls at the rates set above, but publishes the data to cloud slower
-  // can be changed in production once the free tier isn't being used
   if (millis() - lastPublishTime >= PUBLISH_INTERVAL)
   {
     lastPublishTime = millis();
@@ -330,4 +313,5 @@ void loop()
   }
 
   mqtt.processPackets(10);
+}
 }

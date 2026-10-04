@@ -15,7 +15,7 @@
     {
       "type": "wokwi-pir-motion-sensor",
       "id": "pir1",
-      "top": 144,
+      "top": 134.4,
       "left": -141.22,
       "rotate": 180,
       "attrs": {}
@@ -28,13 +28,20 @@
       "rotate": 270,
       "attrs": {}
     },
-    { "type": "wokwi-led", "id": "led1", "top": -138, "left": -265, "attrs": { "color": "red" } },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": 136,
+      "left": -264.6,
+      "rotate": 180,
+      "attrs": { "color": "red" }
+    },
     {
       "type": "wokwi-resistor",
       "id": "r1",
-      "top": -63.8,
-      "left": -269.65,
-      "rotate": 270,
+      "top": -14.95,
+      "left": -251,
+      "rotate": 180,
       "attrs": { "value": "330" }
     },
     {
@@ -43,15 +50,57 @@
       "top": -320.8,
       "left": -352.3,
       "rotate": 90,
-      "attrs": {"ppm": "100"}
+      "attrs": { "ppm": "100" }
     },
     {
       "type": "wokwi-servo",
       "id": "servo1",
-      "top": -359,
-      "left": -575,
+      "top": -356.2,
+      "left": -574.2,
       "rotate": 270,
-      "attrs": {}
+      "attrs": { "hornColor": "#ccc" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text1",
+      "top": -412.8,
+      "left": -508.8,
+      "attrs": { "text": "Gas Ventilation servo" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text2",
+      "top": -384,
+      "left": -316.8,
+      "attrs": { "text": "MQ2 Gas Sensor" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text3",
+      "top": -57.6,
+      "left": 86.4,
+      "attrs": { "text": "Digital Humidity and Temperature \nsensor (DHT22)" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text4",
+      "top": 230.4,
+      "left": -134.4,
+      "attrs": { "text": "Passive Infrared (PIR) motion sensor" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text5",
+      "top": -201.6,
+      "left": -211.2,
+      "attrs": { "text": "Relay Module" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text6",
+      "top": 182.4,
+      "left": -412.8,
+      "attrs": { "text": "Emergency Warning LED" }
     }
   ],
   "connections": [
